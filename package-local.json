@@ -1,0 +1,24 @@
+{
+    "name": "wn-command-init",
+    "version": "0.0.1",
+    "description": "wn project scaffold",
+    "main": "index.js",
+    "scripts": {
+        "test": "test"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/snail-team/wn-command-init.git"
+    },
+    "keywords": [
+        "scaffold",
+        "wn"
+    ],
+    "author": "snail-team <passtome@foxmail.com>",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/snail-team/wn-command-init/issues"
+    },
+    "homepage": "https://github.com/snail-team/wn-command-init"
+  
+}
