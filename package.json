@@ -1,6 +1,6 @@
 {
   "name": "wn-command-init",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "description": "wn project scaffold",
   "main": "index.js",
   "scripts": {

@@ -70,7 +70,7 @@ exports.register = function (commander) {
                     {
                         type:'list',
                         name:'gameName',
-                        message:'蜗牛的哪个游戏?',
+                        message:'蜗牛的哪个项目?',
                         default:'九阴真经',
                         choices:gameNameArr
                     },
