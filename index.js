@@ -1,24 +1,4 @@
 'use strict';
-/*
-* wn init命令
- 功能：初始化不同游戏的项目文件
- 1. 蜗牛的哪个项目？（根据github上snail-team/wn-data/ snailGames.json列出所有游戏名字，该json也可在项目的fisconf里重新配置路径，然后让用户选择，默认九阴真经）
- 九阴真经 大三国 。。。
- gameName（等待用户选择)
- 2. 项目类型是?（官网和专题的区别是官网里有引导页和首页的模板，专题只有一个首页，默认官网）
- 官网 专题
- projectType (等待用户选择)
- 3.如果step2选择了专题则会多问一个问题：专题名称是（中英文不限制）?以便根据专题名称生成个性化seo信息，保存在specialName
- 4. 项目英文名称是（不能有中文）?（给该项目生成package.json使用，因为spm安装模块需要一个package.json，里面指定依赖后才好一起安装，默认文件夹名）
- projectName（等待输入）
- 5. 你需要提前安装哪些模块?（比如：jquery@1.9.1 nav@0.0.2，模块间用空格隔开，如果不想安装任何模块，输入空格即可，默认jquery@1.9.1）
- deps（等待输入）
- 获取所有初始化条件后，先下载远程的github上snail-team/wn-site/ fis-conf.js以及从snail-team/ wn-site-website或者snail-team/ wn-site-special相应的项目类型模板文件，然后根据answers
- 1.生成package.json，如果项目模板文件里有，则不生成，如果没有则生成一个{name: answers.projectName}
- 2.替换模板的变量，以便生成个性化的seo信息
- 3.安装模块，调用spm安装，如果项目本身有package.json则合并安装提前配置的和用户输入的，如果有冲突，优先安装用户输入的，并把安装的模块记录到项目的package.json
-
- * */
 //var debug = require('debug')('wn:init'),
     //colors = require('colors'),
 var path = require('path'),
@@ -33,7 +13,7 @@ var exec = require('child_process').exec,
     child;
 var root=fis.util.realpath(process.cwd());
 var rootPathInfo=fis.util.pathinfo(root);
-
+var parsedRootPath=parsePath(root);
 //console.log(rootPathInfo.filename);
 // prepend ./node_modules to NODE_PATH
 process.env.NODE_PATH = process.env.NODE_PATH ?
@@ -45,101 +25,262 @@ function log(type, msg, color) {
         m = type === 'error' ? type : 'log';
     console[m]((pad + type).green, msg[color]);
 }
+function parsePath(path){
+    //判断模块的模块名和版本号情况
+    //D:/senro/senro/git/company/wn/wn-site/spm_modules/wn-9yin-nav/0.0.6
+    var tmpPath=path.split('/');
+    if(/[0-9]*\.[0-9]*\.[0-9]*/g.test(tmpPath[tmpPath.length-1])){
+        //最后的名字是版本号，说明这是个从spm_modules安装的模块
+        return {name:tmpPath[tmpPath.length-2],version:tmpPath[tmpPath.length-1]};
+    }else{
+        //最后的名字不是版本号，说明这是个本地模块
+        return {name:tmpPath[tmpPath.length-1],version:''};
+    }
+
+}
 
 exports.name = 'init';
 exports.usage = '[options]';
 exports.desc = 'init wn project';
 exports.register = function (commander) {
     commander
-        //没有参数设置
-        //.option('-c, --clean', 'clean template cache')
-        //.option('--skip-install', 'skip installation')
+        .option('-p, --pkg', 'only init package prepare files')
+        .option('-c, --clean', 'clean template cache')
+        .option('--skip-install', 'skip installation')
         .action(function () {
             //log('error', 'start init!!!!', 'red');
             //console.log(arguments);
-            var projectAlias={
-                '官网':'wn-site-website',
-                '手机官网':'wn-site-mobliesite',
-                '专题':'wn-site-special',
-                '手机专题':'wn-site-mobilespecial'
-            };
-            var packageJson='./package.json';
-            var snailGames;
-            var download = new Download({ extract: true, strip: 1, mode: '755' })
-                //'https://codeload.github.com/snail-team/' +projectAlias[answers.gameType] + '/tar.gz/master'
-                //'https://github.com/snail-team/'+projectAlias[answers.gameType]+'/archive/master.zip'
-                //'https://raw.githubusercontent.com/scrat-team/scrat.js/master/scrat.js'
-                .get(fis.config.get('snailGames.json')||'https://raw.githubusercontent.com/snail-team/wn-data/master/snailGames.json')//可以通过fisConf配置snailGames的源json
-                .dest('./')
-                .use(progress());
+            var options = arguments[arguments.length - 1];
+            if(options.pkg){
+                var packageJsonPath='./package.json';
+                var readMeFile='./README.md';
 
-            download.run(function (err, files, stream) {
-                if (err) {
-                    throw err;
-                }
-                console.log('snailGames已下载完毕!');
-                snailGames=fse.readJsonSync('./snailGames.json');
-                //读取snailGames.json后删除
-                fse.removeSync('./snailGames.json');
-                var gameNameArr=[];
-                for(var gameName in snailGames){
-                    if(snailGames[gameName].title!=''){
-                        gameNameArr.push(gameName);
-                    }
-                }
-                inquirer.prompt([
-                    {
-                        type:'list',
-                        name:'gameName',
-                        message:'蜗牛的哪个项目?',
-                        default:'九阴真经',
-                        choices:gameNameArr
-                    },
-                    {
-                        type:'list',
-                        name:'projectType',
-                        message:'项目类型是?',
-                        default:'官网',
-                        choices:['官网','专题']
-                    },
-                    {
-                        type:'input',
-                        name:'specialName',
-                        message:'专题名称是（中英文不限制）?',
-                        default:function(answers){
-                            return answers.gameName;
-                        },//默认为文件名
-                        when:function(answers){
-                            if(answers.projectType=='专题'){
+                if(!fs.existsSync(packageJsonPath)){
+                    //如果没有预置的package.Json,输出一个
+                    inquirer.prompt([
+                        {
+                            type:'input',
+                            name:'moduleName',
+                            message:'模块名称是（不能有中文）?',
+                            default:parsedRootPath.name,//默认为文件名
+                            validate:function(projectName){
+                                if(/^[\u2E80-\u9FFF]+$/g.test(projectName)){
+                                    //如果有汉字
+                                    return false;
+                                }
                                 return true;
                             }
-                            return false;
+                        },
+                        {
+                            type:'input',
+                            name:'moduleDescription',
+                            message:'模块描述？',
+                            default:parsedRootPath.name
+                        },
+                        {
+                            type:'input',
+                            name:'moduleVersion',
+                            message:'版本号?',
+                            default:parsedRootPath.version?parsedRootPath.version:'0.0.1'
+                        },
+                        {
+                            type:'list',
+                            name:'moduleType',
+                            message:'模块类型是?',
+                            default:'js',
+                            choices:['组件','css','js']
+                        },
+//                                    {
+//                                        type:'input',
+//                                        name:'moduleMain',
+//                                        message:'模块主入口文件是?',
+//                                        default:'index.js'
+//                                    },
+                        {
+                            type:'input',
+                            name:'moduleDeps',
+                            message:'依赖哪些模块?',
+                            default:''
                         }
-                    },
-                    {
-                        type:'input',
-                        name:'projectName',
-                        message:'项目英文名称是（不能有中文）?',
-                        default:rootPathInfo.filename,//默认为文件名
-                        validate:function(projectName){
-                            if(/^[\u2E80-\u9FFF]+$/g.test(projectName)){
-                                //如果有汉字
+                    ], function( answers ) {
+
+                        ensureReadMeFile(readMeFile,answers);
+                        fse.outputJsonSync(packageJsonPath, {
+                            name: answers.moduleName,
+                            version:answers.moduleVersion,
+                            description: answers.moduleDescription,
+                            keywords: [
+                                answers.moduleName,
+                                answers.moduleDescription
+                            ],
+                            homepage: "",
+                            author: "haowu-team",
+                            spm:{
+                                main:'',//为了解决spm doc会编译main文件因为wn语法报错问题，故设为空，answers.moduleMain
+                                type:answers.moduleType,
+                                dependencies:cwdToObj(answers.moduleDeps),
+                                devDependencies: {
+                                    "expect.js": "0.3.1"
+                                }
+                            }
+                        });
+
+                    });
+
+
+                }else{
+                    //有预置的package.json
+                    var packageJson=fse.readJsonSync(packageJsonPath);
+                    if(!packageJson.spm.type){
+                        inquirer.prompt([
+                            {
+                                type:'list',
+                                name:'moduleType',
+                                message:'模块类型是?',
+                                default:'js',
+                                choices:['组件','css','js']
+                            }
+                        ], function( answers ) {
+                            packageJson.spm.type=answers.moduleType;
+                            //将spm.dependencies改动写入packageJson
+                            fse.writeJsonSync(packageJsonPath, packageJson);
+                            ensureReadMeFile(readMeFile,{moduleName:packageJson.name,moduleVersion:packageJson.version});
+
+                        });
+                    }
+
+                }
+            }else{
+                var projectAlias={
+                    '官网':'wn-site-website',
+                    '手机官网':'wn-site-mobliesite',
+                    '专题':'wn-site-special',
+                    '手机专题':'wn-site-mobilespecial'
+                };
+                var packageJson='./package.json';
+                var snailGames;
+                var download = new Download({ extract: true, strip: 1, mode: '755' })
+                    //'https://codeload.github.com/snail-team/' +projectAlias[answers.gameType] + '/tar.gz/master'
+                    //'https://github.com/snail-team/'+projectAlias[answers.gameType]+'/archive/master.zip'
+                    //'https://raw.githubusercontent.com/scrat-team/scrat.js/master/scrat.js'
+                    .get(fis.config.get('snailGames.json')||'https://raw.githubusercontent.com/snail-team/wn-data/master/snailGames.json')
+                    .dest('./')
+                    .use(progress());
+
+                download.run(function (err, files, stream) {
+                    if (err) {
+                        throw err;
+                    }
+                    console.log('snailGames已下载完毕!');
+                    snailGames=fse.readJsonSync('./snailGames.json');
+                    //读取snailGames.json后删除
+                    fse.removeSync('./snailGames.json');
+                    var gameNameArr=[];
+                    for(var gameName in snailGames){
+                        if(snailGames[gameName].title!=''){
+                            gameNameArr.push(gameName);
+                        }
+                    }
+                    inquirer.prompt([
+                        {
+                            type:'list',
+                            name:'gameName',
+                            message:'蜗牛的哪个项目?',
+                            default:'九阴真经',
+                            choices:gameNameArr
+                        },
+                        {
+                            type:'list',
+                            name:'projectType',
+                            message:'项目类型是?',
+                            default:'官网',
+                            choices:['官网','专题']
+                        },
+                        {
+                            type:'input',
+                            name:'specialName',
+                            message:'专题名称是（中英文不限制）?',
+                            default:function(answers){
+                                return answers.gameName;
+                            },//默认为文件名
+                            when:function(answers){
+                                if(answers.projectType=='专题'){
+                                    return true;
+                                }
                                 return false;
                             }
-                            return true;
+                        },
+                        {
+                            type:'input',
+                            name:'projectName',
+                            message:'项目英文名称是（不能有中文）?',
+                            default:rootPathInfo.filename,//默认为文件名
+                            validate:function(projectName){
+                                if(/^[\u2E80-\u9FFF]+$/g.test(projectName)){
+                                    //如果有汉字
+                                    return false;
+                                }
+                                return true;
+                            }
+                        },
+                        {
+                            type:'input',
+                            name:'deps',
+                            message:'你需要提前安装哪些模块?',
+                            default:'jquery@1.8.3'
                         }
-                    },
-                    {
-                        type:'input',
-                        name:'deps',
-                        message:'你需要提前安装哪些模块?',
-                        default:'jquery@1.9.1'
-                    }
-                ], function( answers ) {
-                    remote(answers);
+                    ], function( answers ) {
+                        remote(answers);
+                    });
                 });
-            });
+            }
+            function ensureReadMeFile(file,answers){
+                /*
+                 保证readme文件的存在，存在则替换里面的name和version变量，不存在则创建一个readme文件
+                 */
+                //var stat = fs.lstatSync(file);
 
+                if(fs.existsSync(file)){
+                    var content=fs.readFileSync(file,'utf8');
+                    if(typeof content == 'object'){
+                        content=JSON.stringify(content);
+                    }
+                    content=content.replace(/\<\%name\%\>/g,answers.moduleName);
+                    content=content.replace(/\<\%version\%\>/g,answers.moduleVersion);
+
+                    fs.writeFileSync(file,content,'utf8');
+                }else{
+                    fs.writeFileSync(file, '# '+answers.moduleName+'\r\n'+answers.moduleName,'utf8');
+                }
+            }
+            function local(answers){
+
+                initPackageJson(answers);
+                replaceVar(answers);
+                install(answers);
+            }
+            function cwdToObj(deps){
+                //jquery@1.8.3 nav@0.0.2
+                var depsObj={},
+                    tmpArr=deps.split(' ');
+                for(var i=0;i<tmpArr.length;i++){
+                    var module=tmpArr[i];
+                    if(module&&module!=''){
+                        var moduleName,moduleVersion;
+                        if(/@/g.test(module)){
+                            moduleName=module.split('@')[0];
+                            moduleVersion=module.split('@')[1];
+                            depsObj[moduleName]=moduleVersion;
+                        }else{
+                            moduleName=module;
+                            moduleVersion='stable';
+                            depsObj[moduleName]=moduleVersion;
+                        }
+
+                    }
+                }
+                return depsObj;//{jquery:'1.8.3',nav:'0.0.2'}
+            }
             function remote(answers){
                 console.log('请稍等，正在下载...');
                 var download = new Download({ extract: true, strip: 1, mode: '755' })
